@@ -48,36 +48,25 @@ class LayerNormalization(nn.Module):
         return self.alpha*(x - means)/torch.sqrt(variance + self.eps) + self.bias
 
 
-class SelfAttentionV1(nn.Module):
-  def __init__(self, d_in, d_out):
+class CausalAttention(nn.Module):
+  def __init__(self, d_in: int, d_out: int, context_length: int, dropout: float, qkv_bias: bool =False):
     super().__init__()
-    self.d_out = d_out
-    self.W_k = nn.Parameter(torch.randn(d_in,d_out))
-    self.W_q = nn.Parameter(torch.randn(d_in,d_out))
-    self.W_v = nn.Parameter(torch.randn(d_in,d_out))
+    self.d_out = d_out 
+    self.W_k = nn.Linear(d_in, d_out, bias=qkv_bias)
+    self.W_q = nn.Linear(d_in, d_out, bias=qkv_bias)
+    self.W_v = nn.Linear(d_in, d_out, bias=qkv_bias)
+    self.dropout = nn.Dropout(dropout)
+    self.register_buffer('mask', torch.triu(torch.ones((context_length, context_length), dtype=torch.bool), diagonal=1))
 
   def forward(self, inputs):
-    K = inputs @ self.W_k
-    Q = inputs @ self.W_q
-    V = inputs @ self.W_v
-
-    attention_weights = torch.softmax(Q @ K.T/self.d_out**0.5, dim=-1)
-    out = attention_weights @ V
-    return attention_weights, out
-
-
-class SelfAttentionV2(nn.Module):
-  def __init__(self, d_in: int, d_out: int, kqv_bias: bool=False):
-    super().__init__()
-    self.W_k = nn.Linear(d_in, d_out, bias=kqv_bias)
-    self.W_q = nn.Linear(d_in, d_out, bias=kqv_bias)
-    self.W_v = nn.Linear(d_in, d_out, bias=kqv_bias)
-    self.d_out = d_out 
-
-  def forward(self, inputs: torch.Tensor):
     K = self.W_k(inputs)
     Q = self.W_q(inputs)
     V = self.W_v(inputs)
+    attention_scores = Q @ K.transpose(1,2)
+    attention_scores[mask] = -torch.inf
+    attention_weights = self.dropout(torch.softmax(attention_scores/self.d_out**0.5, dim=-1))
+    context_matrix = attention_weights @ V 
+    return attention_weights, context_matrix
 
     attention_weights = torch.softmax(Q @ K.T/self.d_out**0.5, dim=-1)
     context_matrix = attention_weights @ V 
