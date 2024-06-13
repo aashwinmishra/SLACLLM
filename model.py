@@ -63,11 +63,56 @@ class CausalAttention(nn.Module):
     Q = self.W_q(inputs)
     V = self.W_v(inputs)
     attention_scores = Q @ K.transpose(1,2)
-    attention_scores[mask] = -torch.inf
+    attention_scores.masked_fill_(self.mask, -torch.inf)
     attention_weights = self.dropout(torch.softmax(attention_scores/self.d_out**0.5, dim=-1))
     context_matrix = attention_weights @ V 
-    return attention_weights, context_matrix
+    return context_matrix
 
-    attention_weights = torch.softmax(Q @ K.T/self.d_out**0.5, dim=-1)
-    context_matrix = attention_weights @ V 
-    return attention_weights, context_matrix
+
+class MultiHeadAttentionWrapper(nn.Module):
+  def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
+    super().__init__()
+    self.heads = nn.ModuleList([CausalAttention(d_in, d_out, context_length, dropout, qkv_bias) for _ in range(num_heads)])
+
+  def forward(self, inputs):
+    return torch.cat([head(inputs) for head in self.heads], dim=-1)
+
+
+class MultiHeadAttention(nn.Module):
+  def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
+    super().__init__()
+    assert d_out % num_heads == 0
+
+    self.d_out = d_out
+    self.num_heads = num_heads
+    self.head_dim = d_out // num_heads 
+    self.W_k = nn.Linear(d_in, d_out, bias=qkv_bias)
+    self.W_q = nn.Linear(d_in, d_out, bias=qkv_bias)
+    self.W_v = nn.Linear(d_in, d_out, bias=qkv_bias)
+    self.out_proj = nn.Linear(d_out, d_out)
+    self.dropout = nn.Dropout(dropout)
+    self.register_buffer('mask', torch.triu(torch.ones((context_length, context_length), dtype=torch.bool), diagonal=1))
+
+  def forward(self, inputs):
+    batches, num_tokens, d_in = inputs.shape
+    K = self.W_k(inputs)
+    Q = self.W_q(inputs)
+    V = self.W_v(inputs)
+
+    K = K.view(batches, num_tokens, self.num_heads, self.head_dim)
+    Q = Q.view(batches, num_tokens, self.num_heads, self.head_dim)
+    V = V.view(batches, num_tokens, self.num_heads, self.head_dim)
+
+    K = K.transpose(1, 2)
+    Q = Q.transpose(1, 2)
+    V = V.transpose(1, 2)
+
+    attention_scores = Q @ K.transpose(2, 3)
+    attention_scores.masked_fill_(self.mask, -torch.inf)
+    attention_weights = self.dropout(torch.softmax(attention_scores/K.shape[-1]**0.5, dim=-1))
+    context_matrix = (attention_weights @ V).transpose(1, 2)
+
+    context_matrix = context_matrix.contiguous().view(batches, num_tokens, self.d_out)
+
+    return self.out_proj(context_matrix)
+
