@@ -154,3 +154,38 @@ class DummyLayerNorm(nn.Module):
 
   def forward(self, x):
     return x
+
+
+class LayerNorm(nn.Module):
+  def __init__(self, emb_dim: int, eps: float=1e-5):
+    super().__init__()
+    self.eps = eps
+    self.gamma = torch.nn.Parameter(torch.ones(emb_dim))
+    self.beta = torch.nn.Parameter(torch.zeros(emb_dim))
+
+  def forward(self, xb):
+    xb = (xb - xb.mean(dim=-1, keepdims=True)) / torch.sqrt(xb.var(dim=-1, keepdims=True) + self.eps)
+    return xb * self.gamma + self.beta
+
+class GeLU(nn.Module):
+  def __init__(self):
+    super().__init__()
+    self.coeff = torch.sqrt(torch.tensor(2/math.pi))
+
+  def forward(self, x):
+    return 0.5*x*(1.0 + torch.tanh( self.coeff * (x + 0.044715 * torch.pow(x, 3))))
+
+
+class FeedForward(nn.Module):
+  def __init__(self, cfg):
+    super().__init__()
+    dim = cfg["emb_dim"]
+    self.layers = nn.Sequential(
+        nn.Linear(dim, 4 * dim),
+        GeLU(),
+        nn.Linear(4 * dim, dim)
+    )
+
+  def forward(self, xb):
+    return self.layers(xb)
+
