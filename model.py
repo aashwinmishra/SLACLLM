@@ -35,19 +35,6 @@ class PositionalEncoding(nn.Module):
         return self.dropout(embedding)
 
 
-class LayerNormalization(nn.Module):
-    def __init__(self, eps: float = 1e-6):
-        super().__init__()
-        self.eps = eps
-        self.alpha = nn.Parameter(torch.ones(1))
-        self.bias = nn.Parameter(torch.zeros(1))
-
-    def forward(self, x):
-        means = torch.mean(x, dim=-1, keepdim=True)  # TODO: Check the shapes of the inputs to this layer. [Batch, Seq, d_model]
-        variance = torch.var(x, dim=-1, keepdim=True)
-        return self.alpha*(x - means)/torch.sqrt(variance + self.eps) + self.bias
-
-
 class CausalAttention(nn.Module):
   def __init__(self, d_in: int, d_out: int, context_length: int, dropout: float, qkv_bias: bool =False):
     super().__init__()
