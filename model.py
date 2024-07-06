@@ -154,6 +154,7 @@ class LayerNorm(nn.Module):
     xb = (xb - xb.mean(dim=-1, keepdims=True)) / torch.sqrt(xb.var(dim=-1, keepdims=True) + self.eps)
     return xb * self.gamma + self.beta
 
+
 class GeLU(nn.Module):
   def __init__(self):
     super().__init__()
@@ -203,3 +204,4 @@ class TransformerBlock(nn.Module):
     x = self.drop_resid(x)
     x = x + skip
     return x
+
