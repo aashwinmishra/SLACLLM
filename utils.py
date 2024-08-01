@@ -36,3 +36,18 @@ def temperature_scaled_sampling(model, idx, max_new_tokens, context_size, temper
     idx = torch.cat((idx, idx_next), dim=-1)
 
   return idx
+
+
+def top_k_sampling(model, idx, max_new_tokens, context_size, temperature: float=1.0, k: int=3):
+  for _ in range(max_new_tokens):
+    segment = idx[:, -context_size:]
+    with torch.no_grad():
+      logits = model(segment) #dimension [batch_size, context_size, vocab_size]
+    logits = logits[:, -1, :] #only need the last word's pmf for each sample in batch
+    vals = torch.topk(logits, k, dim=-1).values[:, -1:]
+    logits = torch.where( logits >= vals, logits, torch.tensor(float('-inf')).to(logits.device)) / temperature 
+    probs = torch.softmax(logits, dim=-1)
+    idx_next = torch.multinomial(probs, num_samples=1)
+    idx = torch.cat((idx, idx_next), dim=-1)
+
+  return idx
