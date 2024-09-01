@@ -4,35 +4,39 @@ import math
 
 
 class MultiHeadAttention(nn.Module):
-  def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False, **kwargs):
-    super().__init__(**kwargs)
+  def __init__(self, d_in, d_out, context_length, dropout, num_heads, qkv_bias=False):
+    super().__init__()
     assert d_out % num_heads == 0
-    self.W_q = nn.Linear(d_in, d_out, qkv_bias)
-    self.W_k = nn.Linear(d_in, d_out, qkv_bias)
-    self.W_v = nn.Linear(d_in, d_out, qkv_bias)
-
-    self.d_out = d_out
+    self.d_out = d_out 
     self.num_heads = num_heads
-    self.head_dim = d_out // num_heads
+    self.head_dim = d_out // num_heads 
 
-    self.W_o = nn.Linear(d_out, d_out)
-    self.dropout = nn.Dropout(dropout)
+    self.W_query = nn.Linear(d_in, d_out, qkv_bias)
+    self.W_key = nn.Linear(d_in, d_out, qkv_bias)
+    self.W_value = nn.Linear(d_in, d_out, qkv_bias)
+    self.out_proj = nn.Linear(d_out, d_out)
+
     self.mask = torch.triu(torch.ones(context_length, context_length, dtype=torch.bool), diagonal=1)
+    self.dropout = nn.Dropout(dropout)
 
   def forward(self, inputs):
-    b, num_tokens, d_in = inputs.shape
-    Q, K, V = self.W_q(inputs), self.W_k(inputs), self.W_v(inputs)
-    Q = Q.reshape((Q.shape[0], Q.shape[1], self.num_heads, self.head_dim)).transpose(-2, -3)
-    K = K.reshape((K.shape[0], K.shape[1], self.num_heads, self.head_dim)).transpose(-2, -3)
-    V = V.reshape((V.shape[0], V.shape[1], self.num_heads, self.head_dim)).transpose(-2, -3)
+    batch_size, num_tokens, embedding_dim = inputs.shape
+    Q = self.W_query(inputs)
+    K = self.W_key(inputs)
+    V = self.W_value(inputs)
 
-    attn_scores = Q @ K.transpose(-1, -2) / self.head_dim**0.5
-    attn_scores.masked_fill_(self.mask[:num_tokens, :num_tokens], -1e6)
-    attention_weights = torch.softmax(attn_scores, dim=-1)
+    Q = Q.view(batch_size, num_tokens, self.num_heads, self.head_dim).transpose(-2, -3)
+    K = K.view(batch_size, num_tokens, self.num_heads, self.head_dim).transpose(-2, -3)
+    V = V.view(batch_size, num_tokens, self.num_heads, self.head_dim).transpose(-2, -3)
+
+    attention_scores = Q @ K.transpose(-1,-2) / torch.sqrt(torch.tensor(self.head_dim))
+    attention_scores.masked_fill_(self.mask[:num_tokens, :num_tokens], -torch.inf)
+    attention_weights = torch.softmax(attention_scores, dim=-1)
     attention_weights = self.dropout(attention_weights)
-    attention = attention_weights @ V
-    attention = attention.contiguous().reshape((inputs.shape[0], inputs.shape[1], self.d_out))
-    return self.W_o(attention)
+    attention = (attention_weights @ V).transpose(-2, -3)
+
+    attention = attention.reshape(batch_size, num_tokens, self.d_out)
+    return self.out_proj(attention)
 
 
 class LayerNorm(nn.Module):
