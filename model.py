@@ -42,12 +42,12 @@ class MultiHeadAttention(nn.Module):
 class LayerNorm(nn.Module):
   def __init__(self, emb_dim, eps=1e-5):
     super().__init__()
+    self.eps = eps
     self.scale = nn.Parameter(torch.ones(emb_dim))
     self.shift = nn.Parameter(torch.zeros(emb_dim))
-    self.eps = eps
 
-  def forward(self, x):
-    return self.scale * (x - x.mean(dim=-1, keepdim=True)) / (x.std(dim=-1, keepdim=True) + self.eps) +self.shift
+  def forward(self, inputs):
+    return self.scale * (inputs - inputs.mean(dim=-1, keepdims=True)) / (inputs.std(dim=-1, keepdim=True) + self.eps) + self.shift
 
 
 class GELU(nn.Module):
