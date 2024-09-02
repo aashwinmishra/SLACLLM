@@ -75,22 +75,24 @@ class FeedForward(nn.Module):
 class TransformerBlock(nn.Module):
   def __init__(self, cfg):
     super().__init__()
-    self.layernorm1 = LayerNorm(cfg["emb_dim"])
-    self.MultiHeadAttention =  MultiHeadAttention(cfg["emb_dim"], 
-                                                  cfg["emb_dim"], 
-                                                  cfg["context_length"], 
-                                                  cfg["drop_rate"], 
-                                                  cfg["n_heads"], 
-                                                  cfg["qkv_bias"])
-    self.dropout1 = nn.Dropout(cfg["drop_rate"])
+    self.att = MultiHeadAttention(cfg["emb_dim"], cfg["emb_dim"], cfg["context_length"],
+                                  cfg["drop_rate"], cfg["n_heads"], cfg["qkv_bias"])
+    self.ff = FeedForward(cfg)
+    self.norm1 = LayerNorm(cfg["emb_dim"])
+    self.norm2 = LayerNorm(cfg["emb_dim"])
+    self.drop_shortcut = nn.Dropout(cfg["drop_rate"])
 
-    self.layernorm2 = LayerNorm(cfg["emb_dim"])
-    self.FeedForwardBlock = FeedForward(cfg)
-    self.dropout2 = nn.Dropout(cfg["drop_rate"])
-    
   def forward(self, x):
-    x = self.dropout1(self.MultiHeadAttention(self.layernorm1(x))) + x
-    x = self.dropout2(self.FeedForwardBlock(self.layernorm2(x))) + x
+    shortcut = x 
+    x = self.norm1(x)
+    x = self.att(x)
+    x = self.drop_shortcut(x)
+    x = x + shortcut 
+    shortcut = x 
+    x = self.norm2(x)
+    x = self.ff(x)
+    x = self.drop_shortcut(x)
+    x = x + shortcut 
     return x
 
 
@@ -110,7 +112,7 @@ class GPTModel(nn.Module):
     batch_size, seq_len = in_idx.shape
     tok_embeds = self.tok_emb(in_idx)
     pos_embeds = self.pos_emb(torch.arange(seq_len, device=in_idx.device))
-    x = tok_embeds + pos_embeds
+    x = tok_embeds + pos_embeds 
     x = self.drop_emb(x)
     x = self.trf_blocks(x)
     x = self.final_norm(x)
