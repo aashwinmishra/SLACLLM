@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import tiktoken
 
 
 GPT_CONFIG_124M = {
@@ -11,6 +12,15 @@ GPT_CONFIG_124M = {
     "drop_rate": 0.1,
     "qkv_bias": False
 }
+
+
+def text_to_token_ids(text, tokenizer):
+  ids = tokenizer.encode(text, allowed_special={'<|endoftext|>'})
+  return torch.tensor(ids).unsqueeze(0)
+
+
+def token_ids_to_text(token_ids, tokenizer):
+  return tokenizer.decode(token_ids.squeeze(0).tolist())
 
 
 def generate_text_simple(model, idx, max_new_tokens, context_size):
