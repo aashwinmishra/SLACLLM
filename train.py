@@ -33,6 +33,50 @@ def calc_loss_loader(data_loader: torch.utils.data.DataLoader,
   return total_loss/num_batches
 
 
+def train_step(model, train_dl, opt, loss_fn, device):
+  epoch_loss = 0.0
+  model.train()
+
+  for inputs, targets in train_dl:
+    inputs, targets = inputs.to(device), targets.to(device)
+    logits = model(inputs)
+    opt.zero_grad()
+    loss = loss_fn(logits.flatten(0, 1), targets.flatten())
+    loss.backward()
+    opt.step()
+    epoch_loss += loss.detach().cpu().item()
+
+  return epoch_loss/len(train_dl)
+
+
+def val_step(model, val_dl, loss_fn, device):
+  epoch_loss = 0.0 
+  model.eval()
+
+  with torch.inference_mode():
+    for inputs, targets in val_dl:
+      inputs, targets = inputs.to(device), targets.to(device)
+      logits = model(inputs)
+      loss = loss_fn(logits.flatten(0,1), targets.flatten())
+      epoch_loss += loss.cpu().item()
+
+  return epoch_loss/len(val_dl)
+
+
+def train(model, train_dl, val_dl, loss_fn, opt, num_epochs, tokenizer, start_context, device):
+  train_history, val_history = [], []
+  for epoch in range(num_epochs):
+    train_loss = train_step(model, train_dl, opt, loss_fn, device)
+    val_loss = val_step(model, val_dl, loss_fn, device)
+    train_history.append(train_loss)
+    val_history.append(val_loss)
+    print(f"Epoch: {epoch+1} Train Loss: {train_loss:.5f} Val Loss: {val_loss:.5f}")
+    generate_and_print_sample(model, tokenizer, device, start_context)
+
+  return train_history, val_history
+
+
+
 def evaluate_model(model: torch.nn.Module, 
                    train_loader: torch.utils.data.DataLoader, 
                    val_loader: torch.utils.data.DataLoader, 
