@@ -38,7 +38,34 @@ def get_spam_data(url: str="https://archive.ics.uci.edu/static/public/228/sms+sp
   original_file_path = Path(extracted_path) / "SMSSpamCollection"
   os.rename(original_file_path, data_file_path) #C
   print(f"File downloaded and saved as {data_file_path}")
+
+
+class SpamDataset(torch.utils.data.Dataset):
+  def __init__(self, csv_file, tokenizer, max_length=None, pad_token=50256):
+    self.data = pd.read_csv(csv_file)
+    self.encoded_texts = [tokenizer.encode(txt) for txt in self.data["Text"]]
+    if max_length is None:
+      self.max_length = self._longest_encoded_length()
+    else:
+      self.max_length = max_length 
+
+    self.encoded_texts = [seq[:self.max_length] for seq in self.encoded_texts]
+    self.encoded_texts = [encoded_text + [pad_token]*(self.max_length - len(encoded_text)) for encoded_text in self.encoded_texts]
+
+  def __getitem__(self, idx):
+    encoded = self.encoded_texts[idx]
+    label = self.data.iloc[idx]["Label"]
+    return torch.tensor(encoded, dtype=torch.long), torch.tensor(label, dtype=torch.long)
+
+  def __len__(self):
+    return len(self.data)
+
+  def _longest_encoded_length(self):
+    default = 0
+    max_length = max([len(seq) for seq in self.encoded_texts])
+    return max(default, max_length)
                     
+
 
 def load_data(file_path: str):
   with open(file_path, "r", encoding="utf-8") as file:
