@@ -41,6 +41,9 @@ def get_spam_data(url: str="https://archive.ics.uci.edu/static/public/228/sms+sp
 
 
 class SpamDataset(torch.utils.data.Dataset):
+  """
+  Dataset class for Spam dataset, tokenizes and encodes test. Pads/Truncates all sequences uniformly.
+  """
   def __init__(self, csv_file, tokenizer, max_length=None, pad_token=50256):
     self.data = pd.read_csv(csv_file)
     self.encoded_texts = [tokenizer.encode(txt) for txt in self.data["Text"]]
@@ -64,6 +67,48 @@ class SpamDataset(torch.utils.data.Dataset):
     default = 0
     max_length = max([len(seq) for seq in self.encoded_texts])
     return max(default, max_length)
+
+
+def create_spam_dataloaders(train_path: str, 
+                            val_path: str, 
+                            test_path: str, 
+                            max_length: int=None, 
+                            batch_size: int=None):
+  """
+  Utility function to take paths of the train, validation and test data, create 
+  datasets off of the SpamDataset class & return corresponding dataloaders.
+  Args:
+    train_path: Path for the train data csv file, asssumed to have text, class int entries.
+    val_path: Path for the validation data csv file
+    test_path: Path for the test data csv file
+    max_length: Max length of the sequences, tuncates/pads sequences accordingly.
+    batch_size: Batch size for the DataLoader.
+  Returns:
+    Tuple with train_dataloader, val_dataloader, test_dataloader
+  """
+  tokenizer = tiktoken.get_encoding('gpt2')
+  train_dataset = SpamDataset(csv_file=train_path,
+                              max_length=max_length,
+                              tokenizer=tokenizer)
+  val_dataset = SpamDataset(csv_file=val_path,
+                            tokenizer=tokenizer,
+                            max_length=train_dataset.max_length)
+  test_dataset = SpamDataset(csv_file=test_path,
+                             tokenizer=tokenizer,
+                             max_length=train_dataset.max_length)
+  train_dataloader = torch.utils.data.DataLoader(train_dataset, 
+                                                 batch_size=batch_size, 
+                                                 shuffle=True, 
+                                                 drop_last=True)
+  val_dataloader = torch.utils.data.DataLoader(val_dataset, 
+                                                 batch_size=batch_size, 
+                                                 shuffle=False, 
+                                                 drop_last=True)
+  test_dataloader = torch.utils.data.DataLoader(test_dataset, 
+                                                 batch_size=batch_size, 
+                                                 shuffle=False, 
+                                                 drop_last=True)
+  return train_dataloader, val_dataloader, test_dataloader
                     
 
 
