@@ -4,6 +4,17 @@ import json
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
+import torch
+from utils import GPT_CONFIG_124M
+from models import GPTModel
+
+
+def get_pretrained_gpt2() -> torch.nn.Module:
+  gpt = GPTModel(GPT_CONFIG_124M)
+  gpt.eval();
+  settings, params = download_and_load_gpt2(model_size="124M", models_dir="gpt2")
+  load_weights_into_gpt(gpt, params)
+  return gpt
 
 
 def assign(left, right):
