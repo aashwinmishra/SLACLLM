@@ -6,7 +6,7 @@ import tensorflow as tf
 from tqdm import tqdm
 import torch
 from utils import GPT_CONFIG_124M
-from models import GPTModel
+from model import GPTModel
 
 
 def get_pretrained_gpt2() -> torch.nn.Module:
