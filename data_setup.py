@@ -11,6 +11,54 @@ from pathlib import Path
 from typing import List, Dict, Tuple
 
 
+class InstructionDataset(torch.utils.data.Dataset):
+  def __init__(self, data, tokenizer):
+    self.data = data
+    self.encoded_texts = []
+    for entry in data:
+      instruction_plus_entry = format_input(entry)
+      response_text = f"\n\n### Response:\n{entry['output']}"
+      full_text = instruction_plus_entry + response_text
+      self.encoded_texts.append(tokenizer.encode(full_text))
+
+  def __getitem__(self, idx):
+    return self.encoded_texts[idx]
+
+  def __len__(self):
+    return len(self.data)
+
+
+def custom_collate(batch, 
+                   pad_token_id: int=50256, 
+                   ignore_index = -100,
+                   allowed_max_length = None,
+                   device="cpu"):
+  batch_max_length = max(len(item)+1 for item in batch)
+  inputs_list, targets_list = [], []
+
+  for item in batch:
+    new_item = item.copy()
+    new_item += [pad_token_id]
+    padded = new_item + [pad_token_id]*(batch_max_length - len(new_item))
+    inputs = torch.tensor(padded[:-1])
+    targets = torch.tensor(padded[1:])
+    inputs_list.append(inputs)
+    targets_list.append(targets)
+
+    mask = targets == pad_token_id
+    indices = torch.nonzero(mask).squeeze()
+    if indices.numel() > 1:
+      targets[indices[1:]] = ignore_index
+
+    if allowed_max_length is not None:
+      inputs = inputs[:allowed_max_length]
+      targets = targets[:allowed_max_length]
+
+  inputs_tensor = torch.stack(inputs_list).to(device)
+  targets_tensor = torch.stack(targets_list).to(device)
+  return inputs_tensor, targets_tensor
+
+
 def get_spam_data(url: str="https://archive.ics.uci.edu/static/public/228/sms+spam+collection.zip", 
                   zip_path: str="sms_spam_collection.zip", 
                   extracted_path: str="sms_spam_collection", 
